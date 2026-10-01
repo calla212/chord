@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "dependencies": {
+    "dynamo": {
+      "url": "https://github.com/ai-dynamo/dynamo.git",
+      "commit": "8ce9e22f11576402102ea9d8b8e46233f5430a0d",
+      "patches": [
+        "patches/dynamo-integration.patch"
+      ],
+      "overlay": "overlay",
+      "expected_files": {
+        "components/src/dynamo/frontend/main.py": "b251cde1f7afa0fad6e0572cb571b62f993d8e670b998f04f4c89d63cb705f23",
+        "components/src/dynamo/frontend/vllm_processor.py": "9c8e03b54323a58a5b1459f7c81da74c8fa8eeee78cf123c1c0aad80b217615b",
+        "components/src/dynamo/vllm/args.py": "8501e914bede713c316308651713c90d81bef146e4f4e533d6a4ce58bd8857c1",
+        "components/src/dynamo/vllm/backend_args.py": "37af3c509cbd0b4b4c5d3a7096c0dddc364bc453f51398149b583e676b4bfd99",
+        "components/src/dynamo/vllm/chord/__init__.py": "85da219c73da9056ebfb12577d354a36e5a40d168f03a0de599bd63b5a422f21",
+        "components/src/dynamo/vllm/chord/args.py": "9ccaf125a359da85fbb2b23102abc98af3e13b37bf98852429ff023cc4258ef5",
+        "components/src/dynamo/vllm/chord/config.py": "c1736b58b0d88d52eb77163050b2b4ac157c2dd2c6ec184c94ed7da2793d49dd",
+        "components/src/dynamo/vllm/chord/control.py": "d80ba832bfa910c8efce1bca5a65717ce7dd1240d389d0ea8dd74d75ca55330d",
+        "components/src/dynamo/vllm/chord/coordinator.py": "f37f55f9f325eab7dbd76a4d2582072b713e40ca16c75c9869ad7a51fd538f25",
+        "components/src/dynamo/vllm/chord/planner.py": "985d8d5953e33046f86beb99154e7773e873717b27ba8e05c3408478fef831ec",
+        "components/src/dynamo/vllm/chord/protocol.py": "2db15b4ed0bc135507a9b82400db3b9dd4d4fc6aa20f05374d043271ee62a1e5",
+        "components/src/dynamo/vllm/chord/publisher.py": "8d370ddc0ded5d015abf70cbda002df01568b2975ffb8c2a37c89a5c3f26d49a",
+        "components/src/dynamo/vllm/chord/request.py": "93a7fe909c65593ead06559beb105973534eb23432f8ab52a97c0df188617785",
+        "components/src/dynamo/vllm/chord/runtime.py": "34c03a3ea58b7c35fbb9072202d263b22b8421a58d3fd736be12205542934886",
+        "components/src/dynamo/vllm/chord/scheduler.py": "53aa1df2c3d56ab5a3d621e5bde002747594f35a494c8cd011a9422a402d419d",
+        "components/src/dynamo/vllm/chord/server.py": "5266dcca52986c745fd92a3a53e77f0b2118c7526248936e7f8ccc9d627d55d5",
+        "components/src/dynamo/vllm/chord/state.py": "05005286a3b9b362be5c2bc85085d097d78668bb2af931860b87ca78c8fac13f",
+        "components/src/dynamo/vllm/chord/stream.py": "f30357e33b3a25545da89ab6a8d752ba036f1878f20559e3c522aa43e45768d9",
+        "components/src/dynamo/vllm/chord/types.py": "451139867bb5aec5ffe8c45e94628e5e77838258fb9f7830f48000db3119de5b",
+        "components/src/dynamo/vllm/handlers.py": "a8a2e525017c40009380ad2c4651842d24a8ed2911e311a7706238aecfc2d016",
+        "components/src/dynamo/vllm/instrumented_scheduler.py": "6491c6577198f0eaaa1e2446153ac790ff6db78d2692b6bda7f74c42cf3c685c",
+        "components/src/dynamo/vllm/llm_engine.py": "0cbaf3a7ab6bf8dbd782446400985b9a8cc8f43225cd054a779f3a47b799e79c",
+        "components/src/dynamo/vllm/llumnix/__init__.py": "ed9483ee59a76263a759876f53ee5479c59d398122e7b1cf22db881bb45eb63d",
+        "components/src/dynamo/vllm/llumnix/args.py": "3ce0b170c1ae27b7cede7f6dc68bc0f8ec48cb49f34db91e454a8ea4d425b03b",
+        "components/src/dynamo/vllm/llumnix/audit.py": "8a29fdfe29df6d2c65585527da0f42f5ce5b4157e1b8b9eaa17a25a372cc108e",
+        "components/src/dynamo/vllm/llumnix/config.py": "a0d7100d65a82c3d47320e0340eb55ff98d6e494d6d61571588150ab2504df89",
+        "components/src/dynamo/vllm/llumnix/connector.py": "2c93e2971837c3d60e3f50b5d2cc8ddbe98a0382465739f04e209f13aae34bb1",
+        "components/src/dynamo/vllm/llumnix/control.py": "28a320c53cd73230d9bdb2b5e89dfed067a191bd35a38731767a7bac9f0da145",
+        "components/src/dynamo/vllm/llumnix/coordinator.py": "3ab67380640f020074852e7cbfe11803bea20a2e6ab267820326e8205ead1ba2",
+        "components/src/dynamo/vllm/llumnix/handoff.py": "55ff03c9a50bb1f05b1186c92f1b3bd40d1b132e2c364e913fe4feb7dd447733",
+        "components/src/dynamo/vllm/llumnix/metrics.py": "5a8592e1099159afa633a0b756f3b72149d641b8463aad1aee7d86e078d465a3",
+        "components/src/dynamo/vllm/llumnix/migration.py": "d31206028b419b5988e81e8eb480c6643a91d233ed07bf2da77987f732e19060",
+        "components/src/dynamo/vllm/llumnix/policy.py": "e03d86b83e207e537c0e4ac9e696917b80dce67ced62cf04cdd8650bcf1feeb0",
+        "components/src/dynamo/vllm/llumnix/predictor.py": "628f91f6c626397831b9b97076177dc5623b4e8cba4a17768876f682b9af8091",
+        "components/src/dynamo/vllm/llumnix/runtime.py": "bc42b43076ac3f4a5d1ee5efd427738b0483ac0455273ac6f215d11488acb891",
+        "components/src/dynamo/vllm/llumnix/selection.py": "65068fa6958872864285f9e36480fb0c90921f0b0cf234cfc35220b00ac76c88",
+        "components/src/dynamo/vllm/llumnix/status.py": "09d4a3c051c3e875a7eec3d167bdd370c91d458e32501df7fe298a7f41b7592a",
+        "components/src/dynamo/vllm/llumnix/types.py": "88127fd0c88afe6c3289204f42231c73cc7317ff84631520d31e9af6103bb311",
+        "components/src/dynamo/vllm/main.py": "8cd80e32095bb8b032ebe7c5b98cc945c12fa6a812244ca552526140231356ef",
+        "components/src/dynamo/vllm/scheduler_iteration_trace.py": "49e7dd7676f49319d66ccf69d33077d5b370c07dff790a5a41ddddd66cf1d4ad",
+        "components/src/dynamo/vllm/worker_factory.py": "16c0bb6f975efffe73f4cedfcf3e2060a57687c3c6df46d0073b20da4d28e22a",
+        "lib/bindings/python/rust/lib.rs": "56fb3c45787558c71f841f2ca8235932f771b3c6968eed7148b5561b9b8ec028",
+        "lib/bindings/python/rust/llm/kv.rs": "0e76d1162edbef3aae349c5c0213bb288012ebd489ac8343bd703849d66e8297",
+        "lib/bindings/python/src/dynamo/_core.pyi": "f008f55542088673930c40ab4451d967c76750e9987043fcae2bc664e5cb80c4",
+        "lib/kv-router/src/scheduling/local.rs": "529ba7a5f432410126fcec53a2fe68f9071662b7c18cd991521608bce83e2153",
+        "lib/kv-router/src/scheduling/queue.rs": "71f28d58f411092acf28af990ec3d635a3b9ba165b2c3406ff32f3510995a276",
+        "lib/kv-router/src/sequences/multi_worker.rs": "c0861418b03745bae1e4cfb6d750d6d445a96f06b8ed540387fe74c1b5cd1229",
+        "lib/llm/src/aligned.rs": "e30249235ca13b7c2f2fdc9ca5cb8c9deb2cdfe24d085698d8d989728e25a4d8",
+        "lib/llm/src/chord.rs": "9bbba959a7b0e1dd77efc1d7c80738e171149b1084baa2f75212883fdbb1b939",
+        "lib/llm/src/entrypoint/input/common.rs": "5541fb977ad2408532c56519807463a3353ed344563d05abca007f2d40393d89",
+        "lib/llm/src/kv_router.rs": "86f91d4e034bcdc8c2eafcafd7315c66e21735d7c24f7541ce3c8a64ee2c5eb1",
+        "lib/llm/src/kv_router/push_router.rs": "3884e6f8468ab9a4b6cd3e220c4979cae367cf6b5cb12a07adbb6f41d7748cee",
+        "lib/llm/src/kv_router/push_router/request_guard.rs": "c7721c57fcccfca3fb2fd8e748e929fbb981f76cab0dd2e98a17e9e3edb397d1",
+        "lib/llm/src/kv_router/push_router/selection.rs": "978a2b741afc6405c8ea0c0d53473f390a66c3c2bb7dc76c0d07aa250dfc0063",
+        "lib/llm/src/kv_router/scheduler.rs": "04996c241cb2b5e2661f145c07633696695d678d16f09f427c6df0c9ae78b939",
+        "lib/llm/src/kv_router/sequence.rs": "9da48ba7b914a0399884b533012a90687dfae9a714e5447f1274968deda26861",
+        "lib/llm/src/lib.rs": "62a667785a03d042a30569ca69e3630b1fbc8c4d3eb4d3f62fb351faebf0c335"
+      }
+    },
+    "vllm": {
+      "url": "https://github.com/vllm-project/vllm.git",
+      "commit": "0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665",
+      "patches": [
+        "third_party/vllm-chord/patches/0001-feat-scheduler-support-Chord-waiting-request-resume.patch"
+      ],
+      "expected_files": {
+        "vllm/v1/core/sched/output.py": "767bf6caed7ac97c59e28b8f57ac944742fdc3ac978fb0477571543432894d79",
+        "vllm/v1/engine/__init__.py": "cf5e1a083c4ec6b59004b4e3fe56a989686ea289dda2b775421cf17b84b95ec9",
+        "vllm/v1/request.py": "ea931cd624069d5f13caade2fe00fcac793a5b6d47957600ccbcaec67c9a2632",
+        "vllm/v1/worker/gpu_model_runner.py": "939eae386f039647114f32d0b75a1c1b0cf65e4065d6527de4a8671d116aec3f"
+      }
+    },
+    "llumnix-kv": {
+      "url": "https://github.com/llumnix-project/llumnix-kv.git",
+      "commit": "5f8dd152085ed4c6a05a7504d6ae5a42d9471753",
+      "patches": [
+        "third_party/llumnix-kv/patches/vllm-0.23-cuda13.patch"
+      ],
+      "expected_files": {
+        "blade_kvt/hybrid_connector/hybrid_modules.py": "4f82a926d7f605a15f0a36eb7604df7f713b8168d4a8604104abb2516e9536aa",
+        "blade_kvt/hybrid_connector/migration/kvtmigration.py": "f009c42187626f3eb77d68be5d62a577ae34f270bf07b68c822b866651cfc588",
+        "kvtransfer/CMakeLists.txt": "f56914bb52fbfb2e29acf9f92ca0bab8e119b83b6b1adbc9ccbd958d85f0f488",
+        "kvtransfer/src/copy_kernels.cpp": "e2071e7a09431ee35ba822f2310ec5b58898ac1e67d8aa95a25977b8023e0f4f",
+        "setup.py": "220d484daff857573383dee630352cf1678f04cc6efab43768a5e8ffa3e60ea6"
+      }
+    }
+  },
+  "patch_sha256": {
+    "patches/dynamo-integration.patch": "cee5edf322e1c85efd02185e64e369475f6cdbb1a4d3ffa1a214a0395b5d6c61",
+    "third_party/vllm-chord/patches/0001-feat-scheduler-support-Chord-waiting-request-resume.patch": "b89d33b66e1e0dc8338ec96bb2d80ce368113494ecc3cc36809915f815b2a32f",
+    "third_party/llumnix-kv/patches/vllm-0.23-cuda13.patch": "609cb1f75c1b7122c98fecd51340a45807cb3b95855ffc24d5ba7dc4dbf63b82"
+  },
+  "barex": {
+    "version": "1.5.3",
+    "url": "https://eflop.oss-cn-beijing.aliyuncs.com/accl-barex/tcp/accl-barex-pkg-test-tcp-v1.1.7/mlx/accl-barex-cuda12.2-devel-1.5.3-1.deb",
+    "sha256": "008f7c2556d616bbfe4333d73890e9d00fbfabfb9297c65473de0a2559b9eebd"
+  }
+}

@@ -1,0 +1,1449 @@
+diff --git a/blade_kvt/hybrid_connector/hybrid_modules.py b/blade_kvt/hybrid_connector/hybrid_modules.py
+index 1ebddbdae78cb2ba230b7261a36c7af26ce786f2..bf4d6eda02064251ec1839b06795703b3ca85188 100644
+--- a/blade_kvt/hybrid_connector/hybrid_modules.py
++++ b/blade_kvt/hybrid_connector/hybrid_modules.py
+@@ -13,7 +13,7 @@
+ import torch
+ import zmq
+ import zmq.asyncio
+-from zmq import (  # type: ignore
++from zmq import (
+     SUB,
+     SUBSCRIBE,
+     XPUB,
+@@ -23,7 +23,7 @@
+ import vllm.envs as envs
+ from vllm.utils.network_utils import get_ip, get_open_port
+ 
+-# yapf: disable
++
+ from .engine_proxy import (
+     EngineCoreOutput,
+     FinishReason,
+@@ -58,7 +58,7 @@
+     wakeup_core,
+ )
+ 
+-# yapf: enable
++
+ from .utils import (
+     ConnPool,
+     IoRet,
+@@ -72,10 +72,6 @@
+ logger = get_logger(__name__)
+ 
+ 
+-# ============================================================
+-# Base types, constants, backend registry
+-# ============================================================
+-
+ class BackendMeta:
+ 
+     def __bool__(self):
+@@ -84,13 +80,13 @@
+ 
+ HB_IORET = "_HybridBackend_IORET"
+ 
+-# value: int
++
+ PREALLOC_KEY = "_hbprealloc"
+ 
+-# value: int
++
+ CLEANUP_RC_KEY = "_HybridBackend_cleanup_rc"
+ 
+-# value: bool
++
+ ADD_REQ_LOGGED_KEY = "_hb_add_req_logged"
+ 
+ 
+@@ -109,9 +105,8 @@
+     return rc
+ 
+ 
+-# split this to BackendScheduler? BackendWorker?
+ class HybridBackend:
+-    # worker thread
++
+     def __init__(
+         self,
+         vllm_config: VllmConfig,
+@@ -127,91 +122,50 @@
+     def get_request(self, request_id: str) -> Optional[Request]:
+         return sched_get_req(request_id)
+ 
+-    # ==============================
+-    # Worker-side methods
+-    # ==============================
+-
+-    # worker thread
++
+     def register_kv_caches(self, kv_caches: dict[str, torch.Tensor]):
+         return
+ 
+-    # worker thread/disagg thread
+-    # bind_backend_metadata([R]) happen before async_load_kv(R)
++
+     def bind_backend_metadata(self, meta: BackendMeta):
+         return
+ 
+-    # worker thread/disagg thread
++
+     def clear_backend_metadata(self):
+         return
+ 
+-    # disaggw thread
++
+     async def async_load_kv(self, m: BackendMeta) -> AsyncGenerator[IoRet, None]:
+         raise NotImplementedError()
+-        yield "x"  # make vscode happy
+-
+-    # worker thread
++        yield "x"
++
++
+     def async_save_kv_layer(
+         self, layer_name: str, kv_layer: torch.Tensor, m: BackendMeta
+     ) -> Optional[AsyncGenerator[str, None]]:
+         return None
+ 
+-    # ==============================
+-    # Scheduler-side methods
+-    # ==============================
+-
+-    # disagg thread
+-    # return: num_external_tokens.
+-    # If num_external_tokens = 0, it means no load operation will occur.
+-    # Otherwise, it indicates that the backend is responsible for loading
+-    # the kvcache corresponding to the token range
+-    # [num_computed_tokens, num_computed_tokens + num_external_tokens).
++
+     async def async_get_num_new_matched_tokens(
+         self, req: Request, num_computed_tokens: int
+     ) -> int:
+         return 0
+ 
+-    # disagg thread
++
+     async def async_update_state_after_alloc(
+         self, request: "Request", blocks: "KVCacheBlocks", num_external_tokens: int
+     ) -> Optional[IoRet]:
+         return None
+ 
+-    # disagg thread
++
+     async def async_cleanup(self, req: Request):
+         return
+ 
+-    # core thread
+-    # return: (load_count, save_count)
+-    # load_count > 0 means need async load.
+-    # load_count = 0 means async_get_num_new_matched_tokens(R) must return 0.
+-    # save_count > 0 means need async save.
+-    # count is useful when load from/save to multiple srcs/dsts.
++
+     def get_operations(self, req: Request) -> tuple[int, int]:
+         return 0, 0
+ 
+-    # async def on_add_request(self, req: Request, blocks: "KVCacheBlocks"):
+-    #     local = req.num_computed_tokens
+-    #     remote = await self.async_get_num_new_matched_tokens(req, local)
+-    #     if remote == 0:
+-    #         return
+-    #     await self.update_state_after_alloc(req, blocks, remote)
+-    #     return
+-    #
+-    # Regarding the synchronization between `build_backend_meta`
+-    # and `on_add_request`. it is recommended to implement the following
+-    # pattern:
+-    #
+-    # self._q: collections.deque
+-    # As mentioned in https://ata.atatech.org/articles/11020344053,
+-    # deque can be considered thread-safe.
+-    # def update_state_after_alloc(self, req):
+-    #   self._q.append(req)
+-    #
+-    # def build_backend_meta(self, sout):
+-    #   reqs = popall(self._q)
+-    #   # add sout, reqs to meta
+-
+-    # core thread
++
+     def build_backend_meta(self, sout: SchedulerOutput) -> BackendMeta:
+         return BackendMeta()
+ 
+@@ -219,7 +173,6 @@
+ @dataclass
+ class HybridMetadata(KVConnectorMetadata):
+     reqs: BackendMeta
+-    # some metadata used by HybridConnector
+ 
+ 
+ def rpc_port(cfg: VllmConfig):
+@@ -228,34 +181,27 @@
+ 
+ class IoDoneReqs(
+     msgspec.Struct,
+-    array_like=True,  # type: ignore[call-arg]
+-    omit_defaults=True,  # type: ignore[call-arg]
++    array_like=True,
++    omit_defaults=True,
+     gc=False,
+-):  # type: ignore[call-arg]
++):
+     worker_tprank: int
+     reqids: list[IoRet]
+ 
+ 
+-# Body:
+-# +-----+-----------------+
+-# | len | req             |
+-# +-----+-----------------+
+-# len: 4bytes, sizeof(req)
+-# req: encoded IoDoneReqs
+ _SAVE_DONE_REQ = 0x20181221
+ _LOAD_DONE_REQ = 0x20181222
+ 
+-# Another format of _SAVE_DONE_REQ
+-# format: see handle_done_req
++
+ _SAVE_DONE2_REQ = 0x20181223
+ 
+ _SAVE_DONE_RESP = 0x91218102
+ _LOAD_DONE_RESP = _SAVE_DONE_RESP
+ 
+-# value: bool
++
+ _SAVE_PREPARED = "hbsaveprepared"
+ 
+-# value: bool
++
+ _ABORTED = "hbreqisaborted"
+ 
+ _GET_BYPASS_HANDLE = 0x20181226
+@@ -265,13 +211,12 @@
+     return get_param(req, _ABORTED, False)
+ 
+ 
+-# core thread
+ def has_setup_save(req: Request) -> bool:
+     return bool(get_param(req, _SAVE_PREPARED))
+ 
+ 
+ def _get_backend_cls(cfg: VllmConfig) -> type[HybridBackend]:
+-    """Get the backend class based on the kv_transfer_config."""
++
+     assert cfg.kv_transfer_config is not None, (
+         "kv_transfer_config must be set in VllmConfig for HybridConnector"
+     )
+@@ -381,10 +326,6 @@
+     hc_stop0: list[Request] = field(default_factory=list)
+ 
+ 
+-# ============================================================
+-# HybridScheduler
+-# ============================================================
+-
+ class _LoadingReq(IoState):
+     def __init__(self, req: Request):
+         super().__init__()
+@@ -422,14 +363,13 @@
+         self.loop: asyncio.AbstractEventLoop = get_hybrid_sched_loop()
+         self._start_rpc_server()
+ 
+-        ### R/W: disagg thread, core thread
+-        # req, load?, save?
++
+         self._waiting: deque[tuple[Request, bool, bool]] = deque()
+         self._loaded: deque[Request] = deque()
+         self._saved: deque[str] = deque()
+         self._prepared: deque[str] = deque()
+         self._aborting: deque[AbortReq] = deque()
+-        ### R/W: core thread
++
+         self._abortmeta_load: list[Request] = []
+         self._abortmeta_save: list[Request] = []
+         self._stop0: list[Request] = []
+@@ -439,12 +379,12 @@
+         self._migrating_output_tokens_snapshot: dict[str, tuple[int, bool]] = dict()
+         self._migrating_fut: dict[str, asyncio.Future] = dict()
+ 
+-        ### W: core thread. R: disagg thread
++
+         self._saving: dict[str, _SavingReq] = dict()
+         self._loading: dict[str, _LoadingReq] = dict()
+ 
+         self._reqs_ts: dict[str, dict[str, float]] = dict()
+-        ### R/W: disagg thread
++
+         self._iodonedec = MsgpackDecoder(IoDoneReqs)
+ 
+         BackendCls = _get_backend_cls(vllm_config)
+@@ -493,7 +433,7 @@
+         return
+ 
+     def _start_bypass_rpc_server(self):
+-        # create a publish-subscribe socket to communicate
++
+         connect_ip = get_ip()
+         remote_subscribe_port = get_open_port()
+         self.bypass_remote_subscribe_addr = f"tcp://{connect_ip}:{remote_subscribe_port}"
+@@ -519,11 +459,11 @@
+                 self.loop,
+             )
+ 
+-    # disagg thread, core thread
++
+     def _tp_size(self):
+         return self._cfg.parallel_config.tensor_parallel_size
+ 
+-    # core thread
++
+     def step(self) -> Optional[dict[int, list[EngineCoreOutput]]]:
+         self._step_migrating()
+         self._step_saved()
+@@ -568,7 +508,10 @@
+                     logger.info("migrate in pd way: set result reqid=%s, len_prompt=%s, len_output=%s",
+                                 reqid, len(req.prompt_token_ids), len(req.output_token_ids))
+                     loop.call_soon_threadsafe(fut.set_result, (req.prompt_token_ids, req.output_token_ids[:], previous_num_output_token))
+-                    sched_finish_req(reqid)
++                    self.on_abort_req(
++                        AbortReq(reqid=reqid, output=True, reason="migration"),
++                        iscore=True,
++                    )
+                     removed.append(reqid)
+ 
+         for reqid in removed:
+@@ -616,7 +559,7 @@
+             self._try_teardown_save(reqid)
+         return
+ 
+-    # core thread
++
+     def _setup_save(self, req: Request, kvblks: KVCacheBlocks, save_count: int = 1):
+         assert not has_setup_save(req)
+         _inc_cleanup_rc(req)
+@@ -628,12 +571,12 @@
+         set_param(req, _SAVE_PREPARED, True)
+         return
+ 
+-    # core thread
++
+     def _try_teardown_save(self, reqid: str, free_blocks: bool = True):
+         state = self._saving.pop(reqid, None)
+         if state is None:
+             logger.info("teardown save twice: reqid=%s", reqid)
+-            # assert not has_setup_save(state._req)
++
+             return
+         assert has_setup_save(state._req)
+         if free_blocks:
+@@ -641,12 +584,12 @@
+         set_param(state._req, _SAVE_PREPARED, False)
+         return
+ 
+-    # core thread
++
+     def _step_waiting(self):
+         while self._waiting:
+-            # In pd disagg, load means decode, save means prefill
++
+             req, load_count, save_count = self._waiting[0]
+-            
++
+             from blade_kvt.hybrid_connector.kvtbackend import D_LOCAL_PREFILL
+             if get_param(req, D_LOCAL_PREFILL, False):
+                 saving_state = self._saving.get(req.request_id, None)
+@@ -659,13 +602,13 @@
+             else:
+                 gamma = get_p_node_pop_len(self._cfg) - 1
+                 prealloc = get_param(req, PREALLOC_KEY, 0)
+-                # need notify prefill node to allocate slot for poped gamma+1 tokens
++
+                 kvblks = sched_allocate_slots(
+                     req, load_count > 0, save_count > 0, prealloc, gamma)
+-            # Only log on first attempt or successful allocation to avoid noise
++
+             if kvblks is not None or not get_param(req, ADD_REQ_LOGGED_KEY, False):
+                 logger.info(
+-                    "add req. reqid=%s promptlen=%s computed=%s maxcomputed=%s load=%s save=%s nokvblks=%s",  # noqa: E501
++                    "add req. reqid=%s promptlen=%s computed=%s maxcomputed=%s load=%s save=%s nokvblks=%s",
+                     req.request_id,
+                     req.num_prompt_tokens,
+                     req.num_computed_tokens,
+@@ -691,13 +634,12 @@
+                 coro = self._on_add_req(req, kvblks)
+                 asyncio.run_coroutine_threadsafe(coro, self.loop)
+             else:
+-                # fastpath for num_external_tokens = 0.
+-                # In this case, async load operation is not required, the
+-                # request is directly visible to the scheduler.
++
++
+                 self._loaded.append(req)
+         return
+ 
+-    # core thread
++
+     def _step_loaded(self):
+         while self._loaded:
+             req = self._loaded.popleft()
+@@ -727,7 +669,7 @@
+                 self.on_abort_req(areq, iscore=True)
+         return
+ 
+-    # core thread
++
+     def on_add_req(self, req: "Request") -> bool:
+         load_count, save_count = self._backend.get_operations(req)
+         if load_count > 0 or save_count > 0:
+@@ -770,7 +712,7 @@
+                 logger.info("abort saving. areq=%s", areq)
+                 assert has_setup_save(savereq._req)
+                 self._abortmeta_save.append(savereq._req)
+-            
++
+             migratingreq = self._migrating_output_tokens_snapshot.get(areq.reqid)
+             if migratingreq is not None:
+                 logger.info("abort migrating. areq=%s", areq)
+@@ -784,7 +726,7 @@
+ 
+         return load_output
+ 
+-    # thread safe
++
+     def on_abort_req(self, areq: AbortReq, iscore: bool):
+         if iscore:
+             self._aborting.append(areq)
+@@ -792,7 +734,7 @@
+             _q_append(self._aborting, areq)
+         return
+ 
+-    # disagg thread
++
+     @kill_me_if_exception
+     async def _on_add_req(self, req: Request, kvblks: KVCacheBlocks):
+         local = req.num_computed_tokens
+@@ -809,7 +751,7 @@
+             _q_append(self._prepared, req.request_id)
+         return
+ 
+-    # disagg thread
++
+     async def mark_loaded(self, req: Request, ioret: Optional[IoRet] = None):
+         set_param(req, HB_IORET, ioret)
+         _q_append(self._loaded, req)
+@@ -898,7 +840,7 @@
+             await self._backend.async_cleanup(req)
+         return
+ 
+-    # core thread
++
+     def get_num_new_matched_tokens(
+         self,
+         request: "Request",
+@@ -906,14 +848,14 @@
+     ) -> tuple[int, bool]:
+         return 0, False
+ 
+-    # core thread
++
+     def update_state_after_alloc(
+         self, request: "Request", blocks: "KVCacheBlocks", num_external_tokens: int
+     ):
+         assert num_external_tokens == 0
+         return
+ 
+-    # core thread
++
+     def build_connector_meta(self, sout: SchedulerOutput) -> HybridMetadata:
+         self._prepared.clear()
+         hcsout = HCSchedOutput(
+@@ -928,7 +870,7 @@
+         reqs = self._backend.build_backend_meta(hcsout)
+         return HybridMetadata(reqs=reqs)
+ 
+-    # core thread
++
+     def has_requests(self) -> bool:
+         if self._migrating_output_tokens_snapshot:
+             return True
+@@ -978,7 +920,6 @@
+     _g_scheduler = sched
+ 
+ 
+-# core thread
+ def try_setup_save(req: Request):
+     global _g_scheduler
+     if has_setup_save(req):
+@@ -991,7 +932,6 @@
+     return
+ 
+ 
+-# core thread
+ def try_teardown_save(req: Request):
+     global _g_scheduler
+     assert _g_scheduler is not None
+@@ -999,7 +939,6 @@
+     return
+ 
+ 
+-# schedule build_connector_meta to execute
+ def wakeup_scheduler():
+     assert _g_scheduler is not None
+     _q_append(_g_scheduler._prepared, '__FAKE_REQID_FOR_HYBRID_CONNECTOR__')
+@@ -1027,9 +966,6 @@
+             WORKFLOW = "MAIN"
+     return wrapper
+ 
+-# ============================================================
+-# HybridWorker
+-# ============================================================
+ 
+ class _WSavingReq:
+     def __init__(self):
+@@ -1043,12 +979,12 @@
+         self._strdec = MsgpackDecoder(str)
+         self.loop = get_hybrid_worker_loop()
+ 
+-        ### R/W: worker thread
++
+         self._meta: Optional[HybridMetadata] = None
+ 
+-        ### R/W: disaggw thread
++
+         self._saving: dict[str, _WSavingReq] = dict()
+-        core_ip = "127.0.0.1"  # get from kv_transfer config
++        core_ip = "127.0.0.1"
+         self._connpool = ConnPool(core_ip, rpc_port(self._cfg), 3)
+         self._ioenc = MsgpackEncoder()
+ 
+@@ -1064,18 +1000,18 @@
+     async def _get_bypass_handle(self):
+         core_ip = "127.0.0.1"
+         scheduler_port = rpc_port(self._cfg)
+-        # Scheduler Bypass server might not be ready yet
++
+         await asyncio.sleep(2)
+         last_log_time = 0.0
+         req = struct.pack("=I", _GET_BYPASS_HANDLE)
+         while True:
+             try:
+-                # Send RPC to scheduler and wait for response
++
+                 reader, writer = await asyncio.open_connection(core_ip, scheduler_port)
+                 writer.write(req)
+                 await writer.drain()
+ 
+-                # Wait for response to confirm successful registration with timeout
++
+                 try:
+                     respbuf = await asyncio.wait_for(reader.readexactly(4 + 4),
+                                                      timeout=3.0)
+@@ -1106,7 +1042,7 @@
+                 continue
+         raise RuntimeError("dead code")
+ 
+-    # disagg thread
++
+     def _do_bypass_meta(self, meta: HybridMetadata):
+         self._backend.bind_backend_metadata(meta.reqs)
+         self._backend.clear_backend_metadata()
+@@ -1148,8 +1084,8 @@
+         return
+ 
+     def register_kv_caches(self, kv_caches: dict[str, torch.Tensor]):
+-        # For Hybrid models, allocated kv cache layer num
+-        # is equal to the number of self.attns layers
++
++
+         self._num_layers = len(self._kv_cache_config.kv_cache_groups[0].layer_names)
+         logger.info("Registering kv_caches, num_layers=%s", self._num_layers)
+         return self._backend.register_kv_caches(kv_caches)
+@@ -1222,10 +1158,6 @@
+             await self._on_req_saved(reqid, layer_name)
+         return
+ 
+-
+-# ============================================================
+-# HybridConnector
+-# ============================================================
+ 
+ class HybridConnector(KVConnectorBase_V1, SupportsHMA):
+     def __init__(
+@@ -1246,9 +1178,6 @@
+             self._worker = HybridWorker(vllm_config, kv_cache_config)
+         return
+ 
+-    ############################################################
+-    # Scheduler Side Methods
+-    ############################################################
+ 
+     def get_num_new_matched_tokens(
+         self, request: "Request", num_computed_tokens: int
+@@ -1292,9 +1221,7 @@
+         )
+         return
+ 
+-    ############################################################
+-    # Worker Side Methods
+-    ############################################################
++
+     def bind_connector_metadata(self, m: KVConnectorMetadata) -> None:
+         assert isinstance(m, HybridMetadata)
+         assert self._worker is not None
+diff --git a/blade_kvt/hybrid_connector/migration/kvtmigration.py b/blade_kvt/hybrid_connector/migration/kvtmigration.py
+index 601f05b02863e6abe281026702a787cf2bb07647..812c6198716b2e4ca7786e9f1aefbcf9c669c139 100644
+--- a/blade_kvt/hybrid_connector/migration/kvtmigration.py
++++ b/blade_kvt/hybrid_connector/migration/kvtmigration.py
+@@ -20,7 +20,7 @@
+     sched_rpc_server,
+ )
+ 
+-# yapf: disable
++
+ from ..kvtbackend import (
+     CODE_OK,
+     CODE_REQNOTFOUND,
+@@ -36,7 +36,7 @@
+     _g_migrate_out_req_info_lock,
+ )
+ 
+-# yapf: enable
++
+ from ..utils import IoRet
+ from . import KVT_SUSPEND_REQ, SRC_INFO, migrate_in_pd_way
+ from .backend import MigrationBackend, SuspendReq
+@@ -51,7 +51,7 @@
+ 
+         if cfg.model_config.is_hybrid and cfg.cache_config.enable_prefix_caching:
+             logger.fatal("migration is not support for hybrid model when prefix caching is enabled")
+-        
++
+         if cfg.model_config.is_hybrid and not migrate_in_pd_way():
+             logger.fatal("migration based on recompute is not support for hybrid model")
+ 
+@@ -70,29 +70,25 @@
+ 
+         return
+ 
+-    # ==============================
+-    # Worker-side methods
+-    # ==============================
+ 
+     def register_kv_caches(self, kv_caches: dict[str, torch.Tensor]):
+         self._p.register_kv_caches(kv_caches)
+         self._d.register_kv_caches(kv_caches)
+         return
+ 
+-    # worker thread
+-    # bind_backend_metadata([R]) happen before async_load_kv(R)
++
+     def bind_backend_metadata(self, meta: BackendMeta):
+         self._p.bind_backend_metadata(meta)
+         return
+ 
+-    # worker thread
++
+     def clear_backend_metadata(self):
+         self._p.clear_backend_metadata()
+         return
+ 
+-    async_load_kv = None  # type: ignore
++    async_load_kv = None
+ 
+-    # worker thread
++
+     def async_save_kv_layer(
+         self, layer_name: str, kv_layer: torch.Tensor, m: BackendMeta
+     ) -> Optional[AsyncGenerator[str, None]]:
+@@ -100,9 +96,7 @@
+         assert r is None
+         return None
+ 
+-    # ==============================
+-    # Scheduler-side methods
+-    # ==============================
++
+     async def async_get_num_new_matched_tokens(
+         self, req: Request, num_computed_tokens: int
+     ) -> int:
+@@ -143,8 +137,8 @@
+         assert isinstance(ret, BackendMeta)
+         kvt = self._p.build_backend_meta(sout)
+         return kvt
+-    
+-    # disagg thread
++
++
+     async def _on_transfer_suspend_kv(self, reader, writer):
+         bodylenbuf = await reader.readexactly(4)
+         (bodylen,) = struct.unpack("=I", bodylenbuf)
+@@ -164,7 +158,7 @@
+                 _g_migrate_out_req_ids.discard(req.reqid)
+                 if envs.LLUMNIX_DETAILED_MIG_STATUS:
+                     with _g_migrate_out_req_info_lock:
+-                        _g_migrate_out_req_info.pop(req.reqid)
++                        _g_migrate_out_req_info.pop(req.reqid, None)
+ 
+         logger.info(f"migration transfer kv and suspend req ({req.reqid}) done, resp: {resp}")
+ 
+@@ -176,4 +170,3 @@
+ 
+         await writer.drain()
+         return
+-    
+\ No newline at end of file
+diff --git a/kvtransfer/CMakeLists.txt b/kvtransfer/CMakeLists.txt
+index 692582c149cc2b60de6d2fc2294d1a017c2ac851..cf877cc1df75212b38973aa79e037c6e5b5ba95e 100644
+--- a/kvtransfer/CMakeLists.txt
++++ b/kvtransfer/CMakeLists.txt
+@@ -8,14 +8,10 @@
+ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -ggdb -lrt")
+ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wall -Wextra -Wshadow")
+ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror -Wall -Wextra -Wshadow")
+-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused -Wno-unused-parameter")
+-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-unused -Wno-unused-parameter ")
++set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused -Wno-unused-parameter -Wno-missing-field-initializers")
++set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-unused -Wno-unused-parameter -Wno-missing-field-initializers")
+ 
+ option(BUILD_RDMA "build RDMA(accl-barex) transfer" ON)
+-option(BUILD_TESTS "build and run unit tests" OFF)
+-if (BUILD_TESTS)
+-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
+-endif ()
+ option(BUILD_PYTHON_BIND "build interface expose to python" OFF)
+ option(ENABLE_BATCH_COPY "enable CUDA batch copy (cudaMemcpyBatchAsync)" OFF)
+ option(USE_PYBIND11 "build pybind use pybind11 or use torch extension" OFF)
+@@ -42,7 +38,7 @@
+     endif ()
+ endif ()
+ 
+-# Enable CUDA batch copy if requested and supported
++
+ if (ENABLE_BATCH_COPY)
+     message(STATUS "ENABLE_BATCH_COPY is ON, enabling CUDA batch copy support")
+     add_compile_definitions(ENABLE_BATCH_COPY)
+@@ -67,34 +63,34 @@
+     message(STATUS "Torch package not found")
+ endif ()
+ 
+-find_library(CURL_LIBRARIES curl PATHS ${FIND_LIBRARY_PATHS})
+-if (CURL_LIBRARIES)
+-    message(STATUS "find libcurl at ${CURL_LIBRARIES}")
+-    list(APPEND TARGET_LINK_LIBS ${CURL_LIBRARIES})
+-    add_compile_definitions(ENABLE_CURL)
+-elseif (CURL_REQUIRED)
+-    message(STATUS "libcurl not found, try to fetch from website ...")
+-    include(FetchContent)
+-    FetchContent_Declare(curl
+-            URL https://curl.se/download/curl-8.10.0.tar.gz
+-            DOWNLOAD_EXTRACT_TIMESTAMP true
+-    )
+-    FetchContent_Populate(curl)
+-    if (NOT curl_POPULATED)
+-        message(FATAL_ERROR "libcurl failed to populated")
++if (CURL_REQUIRED)
++    find_library(CURL_LIBRARIES curl PATHS ${FIND_LIBRARY_PATHS})
++    if (CURL_LIBRARIES)
++        message(STATUS "find libcurl at ${CURL_LIBRARIES}")
++        list(APPEND TARGET_LINK_LIBS ${CURL_LIBRARIES})
++        add_compile_definitions(ENABLE_CURL)
++    else()
++        message(STATUS "libcurl not found, try to fetch from website ...")
++        include(FetchContent)
++        FetchContent_Declare(curl
++                URL https://curl.se/download/curl-8.10.0.tar.gz
++                DOWNLOAD_EXTRACT_TIMESTAMP true
++        )
++        FetchContent_Populate(curl)
++        if (NOT curl_POPULATED)
++            message(FATAL_ERROR "libcurl failed to populated")
++        endif ()
++        add_compile_definitions(HAVE_POSIX_STRERROR_R)
++        add_subdirectory(${curl_SOURCE_DIR} ${curl_BINARY_DIR})
++        list(APPEND TARGET_LINK_LIBS libcurl_shared)
++        add_compile_definitions(ENABLE_CURL)
+     endif ()
+-    add_compile_definitions(HAVE_POSIX_STRERROR_R)
+-    add_subdirectory(${curl_SOURCE_DIR} ${curl_BINARY_DIR})
+-    list(APPEND TARGET_LINK_LIBS libcurl_shared)
+-    add_compile_definitions(ENABLE_CURL)
+ endif ()
+ 
+ file(GLOB_RECURSE SRCS CONFIGURE_DEPENDS src/*.cpp src/*.cu)
+-# Exclude test files and standalone implementations from production build
+-list(FILTER SRCS EXCLUDE REGEX ".*/benchmarks/.*/test_.*\\.cpp$")
+-list(FILTER SRCS EXCLUDE REGEX ".*/benchmarks/.*/d2h_stream_impl\\.cpp$")
++list(FILTER SRCS EXCLUDE REGEX ".*/benchmarks/.*")
+ 
+-set(Python3_EXECUTABLE "/usr/bin/python3")
++
+ find_package (Python3 COMPONENTS Interpreter Development)
+ list(APPEND TARGET_INCLUDE_DIRS ${Python3_INCLUDE_DIRS})
+ list(APPEND TARGET_LINK_LIBS ${TORCH_PYTHON_LIBRARY} ${Python3_LIBRARIES})
+@@ -132,23 +128,4 @@
+     target_include_directories(kvtransfer PUBLIC ${TARGET_INCLUDE_DIRS})
+     target_link_libraries(kvtransfer PUBLIC ${TARGET_LINK_LIBS})
+ 
+-    if (BUILD_TESTS)
+-        enable_testing()
+-        include(FetchContent)
+-        FetchContent_Declare(
+-                googletest
+-                GIT_REPOSITORY https://github.com/google/googletest.git
+-                GIT_TAG        b514bdc898e2951020cbdca1304b75f5950d1f59 # release-1.15.2
+-        )
+-        FetchContent_MakeAvailable(googletest)
+-        file(GLOB_RECURSE TESTS CONFIGURE_DEPENDS tests/*.cpp tests/*.cu)
+-        add_executable(kv_transfer_test ${TESTS})
+-        target_compile_features(kv_transfer_test PUBLIC cxx_std_17)
+-        target_include_directories(kv_transfer_test PUBLIC ${TARGET_INCLUDE_DIRS} ${GTEST_INCLUDE_DIRS})
+-        set(TEST_LINK_LIBS ${TARGET_LINK_LIBS} ${GTEST_BOTH_LIBRARIES} GTest::gmock GTest::gmock_main kvtransfer)
+-        target_link_libraries(kv_transfer_test PUBLIC ${TEST_LINK_LIBS})
+-        set_target_properties(kv_transfer_test PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+-        include(GoogleTest)
+-        gtest_discover_tests(kv_transfer_test DISCOVERY_MODE PRE_TEST)
+-    endif ()
+ endif ()
+diff --git a/kvtransfer/src/copy_kernels.cpp b/kvtransfer/src/copy_kernels.cpp
+index 2756035cdef7d945fdaa22a298eda1f8c4befaa9..0bfcb153ff5205f618d609fd15670cabbb243dac 100644
+--- a/kvtransfer/src/copy_kernels.cpp
++++ b/kvtransfer/src/copy_kernels.cpp
+@@ -16,8 +16,6 @@
+ #include <torch/extension.h>
+ #endif
+ 
+-// KERNEL_COPY_MAX_BLOCK_NUM is now obtained from environment variable via env_kernel_copy_max_block_num()
+-// This is the maximum number of blocks that can be processed in a single kernel launch
+ 
+ #define CUDA_CHECK(call)                                                 \
+   {                                                                      \
+@@ -30,7 +28,7 @@
+   }
+ 
+ namespace blade_llm {
+-// Forward declaration of CUDA kernel (defined in copy_kernels.cu)
++
+ extern void copy_h2d_direct_kernel(
+     const char* __restrict__ host_src,
+     char* __restrict__ gpu_dst_base,
+@@ -107,7 +105,7 @@
+     cudaStream_t stream
+ );
+ 
+-// Global configuration for copy kernel launch
++
+ namespace {
+     struct CopyKernelConfig {
+         int threads_per_block = 512;
+@@ -118,7 +116,7 @@
+             int max_threads_per_sm = 0;
+             int total_gpu_sm_count = 0;
+             int max_blocks_per_sm = 0;
+-            
++
+             CUDA_CHECK(cudaDeviceGetAttribute(&max_threads_per_block,
+                                               cudaDevAttrMaxThreadsPerBlock, 0));
+             CUDA_CHECK(cudaDeviceGetAttribute(&max_threads_per_sm,
+@@ -126,22 +124,36 @@
+             CUDA_CHECK(cudaDeviceGetAttribute(&total_gpu_sm_count,
+                                               cudaDevAttrMultiProcessorCount, 0));
+ 
+-            for (int i = 1; i <= max_threads_per_sm; i++) {
+-                int tmp_num_threads = max_threads_per_sm / i;
+-                if (tmp_num_threads <= max_threads_per_block) {
+-                    threads_per_block = tmp_num_threads;
++
++            int candidate_threads = 1;
++            while (candidate_threads <= max_threads_per_block / 2) {
++                candidate_threads *= 2;
++            }
++            while (candidate_threads >= 32) {
++                if (direction == CopyDirection::H2D) {
++                    CUDA_CHECK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
++                        &max_blocks_per_sm, copy_h2d_direct_kernel,
++                        candidate_threads, 0));
++                } else {
++                    CUDA_CHECK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
++                        &max_blocks_per_sm, copy_d2h_direct_kernel,
++                        candidate_threads, 0));
++                }
++                if (max_blocks_per_sm > 0) {
++                    threads_per_block = candidate_threads;
+                     break;
+                 }
++                candidate_threads /= 2;
++            }
++            if (max_blocks_per_sm <= 0) {
++                std::cerr << "No valid CUDA occupancy for copy kernel" << std::endl;
++                std::abort();
+             }
+             if (direction == CopyDirection::H2D) {
+-                CUDA_CHECK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+-                    &max_blocks_per_sm, copy_h2d_direct_kernel,
+-                    threads_per_block, 0));
+-                max_blocks = max_blocks_per_sm * total_gpu_sm_count * env_kernel_copy_sm_usage();
++                max_blocks = std::max(
++                    1, static_cast<int>(max_blocks_per_sm * total_gpu_sm_count
++                                        * env_kernel_copy_sm_usage()));
+             } else {
+-                CUDA_CHECK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+-                    &max_blocks_per_sm, copy_d2h_direct_kernel,
+-                    threads_per_block, 0));
+                 max_blocks = 1;
+             }
+ 
+@@ -153,8 +165,10 @@
+                       << std::endl;
+         }
+     };
+-    CopyKernelConfig g_copy_kernel_config;
+-    std::once_flag g_init_flag;
++    CopyKernelConfig g_h2d_copy_kernel_config;
++    CopyKernelConfig g_d2h_copy_kernel_config;
++    std::once_flag g_h2d_init_flag;
++    std::once_flag g_d2h_init_flag;
+ }
+ 
+ inline void get_optimal_launch_config(
+@@ -163,11 +177,17 @@
+     CopyDirection direction,
+     size_t num_blocks = 0
+ ) {
+-    std::call_once(g_init_flag, [direction]() {
+-        g_copy_kernel_config.initialize(direction);
++    CopyKernelConfig& config = direction == CopyDirection::H2D
++        ? g_h2d_copy_kernel_config
++        : g_d2h_copy_kernel_config;
++    std::once_flag& init_flag = direction == CopyDirection::H2D
++        ? g_h2d_init_flag
++        : g_d2h_init_flag;
++    std::call_once(init_flag, [&config, direction]() {
++        config.initialize(direction);
+     });
+-    threads_per_block = g_copy_kernel_config.threads_per_block;
+-    num_cuda_blocks = g_copy_kernel_config.max_blocks;
++    threads_per_block = config.threads_per_block;
++    num_cuda_blocks = config.max_blocks;
+ }
+ 
+ void copy_handle_data_kernel_direct(
+@@ -187,40 +207,39 @@
+     if (num_blocks == 0) {
+         return;
+     }
+-    
+-    // Prepare offset/length arrays directly in preallocated pinned memory buffer
+-    // GPU memory layout: [src_offsets] [dst_offsets] [lengths] (continuous)
++
++
+     size_t tensor_offset = 0;
+     for (size_t i = 0; i < num_blocks; ++i) {
+         const auto& block = blocks[i];
+         assert(block.length > 0);
+         assert(tensor_offset + block.length <= tensor_data_size);
+-        
+-        // src_offset is cumulative (contiguous CPU buffer)
++
++
+         host_blk_buffer_ptr[i] = static_cast<int64_t>(tensor_offset);
+         host_blk_buffer_ptr[num_blocks + i] = static_cast<int64_t>(block.dst_offset);
+         host_blk_buffer_ptr[2 * num_blocks + i] = static_cast<int64_t>(block.length);
+-        
++
+         tensor_offset += block.length;
+     }
+     assert(tensor_offset == tensor_data_size);
+-    
++
+     size_t array_size = num_blocks * sizeof(int64_t) * 3;
+-    CUDA_CHECK(cudaMemcpyAsync(src_offsets_dev, host_blk_buffer_ptr, 
++    CUDA_CHECK(cudaMemcpyAsync(src_offsets_dev, host_blk_buffer_ptr,
+                         array_size, cudaMemcpyHostToDevice, stream));
+ 
+     char* host_ptr_device = tensor_buf_ptr;
+-    
++
+     int num_cuda_blocks, threads_per_block;
+     get_optimal_launch_config(num_cuda_blocks, threads_per_block, direction, num_blocks);
+-    
++
+     if (direction == CopyDirection::H2D) {
+-        // H2D: CPU pinned memory -> GPU scattered memory (direct kernel access)
++
+         launch_copy_h2d_direct_kernel(
+-            host_ptr_device,  // Pinned host memory source (device-accessible)
+-            reinterpret_cast<char*>(layer_gpu_ptr),  // GPU destination base
+-            src_offsets_dev,  // Source offsets in host buffer
+-            dst_offsets_dev,  // Destination offsets in GPU memory
++            host_ptr_device,
++            reinterpret_cast<char*>(layer_gpu_ptr),
++            src_offsets_dev,
++            dst_offsets_dev,
+             lengths_dev,
+             static_cast<int64_t>(num_blocks),
+             num_cuda_blocks,
+@@ -228,12 +247,12 @@
+             stream
+         );
+     } else {
+-        // D2H: GPU scattered memory -> CPU pinned memory (direct kernel access)
++
+         launch_copy_d2h_direct_kernel(
+-            reinterpret_cast<const char*>(layer_gpu_ptr),  // GPU source base
+-            host_ptr_device,  // Pinned host memory destination (device-accessible)
+-            dst_offsets_dev,  // Source offsets in GPU scattered memory
+-            src_offsets_dev,  // Destination offsets in host buffer
++            reinterpret_cast<const char*>(layer_gpu_ptr),
++            host_ptr_device,
++            dst_offsets_dev,
++            src_offsets_dev,
+             lengths_dev,
+             static_cast<int64_t>(num_blocks),
+             num_cuda_blocks,
+@@ -259,12 +278,12 @@
+     if (num_blocks == 0) {
+         return cudaSuccess;
+     }
+-    
++
+     char* buffer = reinterpret_cast<char*>(preallocated_buffer);
+     size_t max_blocks_per_batch = env_kernel_copy_max_block_num();
+     size_t array_size_per_batch = max_blocks_per_batch * sizeof(int64_t);
+-    
+-    // Process blocks in batches if num_blocks exceeds max_blocks_per_batch
++
++
+     if (num_blocks <= max_blocks_per_batch) {
+         size_t array_size = num_blocks * sizeof(int64_t);
+         int64_t* src_offsets_dev = reinterpret_cast<int64_t*>(buffer);
+@@ -272,26 +291,26 @@
+         int64_t* lengths_dev = reinterpret_cast<int64_t*>(buffer + array_size * 2);
+ 
+         copy_handle_data_kernel_direct(
+-            tensor_buf_ptr, layer_gpu_ptr, blocks, 
++            tensor_buf_ptr, layer_gpu_ptr, blocks,
+             tensor_data_size, direction, target_device, stream,
+-            src_offsets_dev, dst_offsets_dev, lengths_dev, 
++            src_offsets_dev, dst_offsets_dev, lengths_dev,
+             host_blk_buffer_ptr
+         );
+     } else {
+         size_t tensor_offset = 0;
+         size_t processed_blocks = 0;
+-        
++
+         while (processed_blocks < num_blocks) {
+             size_t batch_size = std::min(max_blocks_per_batch, num_blocks - processed_blocks);
+-            
++
+             std::vector<IpcBlock> batch_blocks;
+             batch_blocks.reserve(batch_size);
+             size_t batch_tensor_size = 0;
+-            size_t batch_tensor_offset = 0;  // Offset within this batch
+-            
++            size_t batch_tensor_offset = 0;
++
+             for (size_t i = 0; i < batch_size; ++i) {
+                 const auto& block = blocks[processed_blocks + i];
+-                // src_offset is relative to batch_tensor_buf_ptr (starts from 0 for each batch)
++
+                 batch_blocks.emplace_back(batch_tensor_offset, block.dst_offset, block.length);
+                 batch_tensor_size += block.length;
+                 batch_tensor_offset += block.length;
+@@ -305,26 +324,23 @@
+             char* batch_tensor_buf_ptr = tensor_buf_ptr + (tensor_offset - batch_tensor_size);
+ 
+             copy_handle_data_kernel_direct(
+-                batch_tensor_buf_ptr, layer_gpu_ptr, 
+-                batch_blocks, batch_tensor_size, 
++                batch_tensor_buf_ptr, layer_gpu_ptr,
++                batch_blocks, batch_tensor_size,
+                 direction, target_device, stream,
+-                src_offsets_dev, dst_offsets_dev, lengths_dev, 
++                src_offsets_dev, dst_offsets_dev, lengths_dev,
+                 host_blk_buffer_ptr
+             );
+             processed_blocks += batch_size;
+-            // Sync before next iteration: host_blk_buffer_ptr is reused and will be
+-            // overwritten. Must ensure cudaMemcpyAsync has finished reading it.
++
++
+             CUDA_CHECK(cudaStreamSynchronize(stream));
+         }
+     }
+-    
++
+     cudaError_t err = cudaGetLastError();
+     return err;
+ }
+ 
+-//===============================================
+-// BF16 to FP8 Conversion Related Functions
+-//===============================================
+ 
+ cudaError_t copy_d2h_bf16_to_fp8(
+     char* tensor_buf_ptr,
+@@ -340,38 +356,35 @@
+     if (num_blocks == 0) {
+         return cudaSuccess;
+     }
+-    
++
+     char* buffer = reinterpret_cast<char*>(preallocated_buffer);
+     size_t max_blocks_per_batch = env_kernel_copy_max_block_num();
+     size_t array_size_per_batch = max_blocks_per_batch * sizeof(int64_t);
+-    
+-    // Process blocks in batches if num_blocks exceeds max_blocks_per_batch
++
++
+     if (num_blocks <= max_blocks_per_batch) {
+-        // Single batch processing
++
+         size_t array_size = num_blocks * sizeof(int64_t);
+         int64_t* src_offsets_dev = reinterpret_cast<int64_t*>(buffer);
+         int64_t* dst_offsets_dev = reinterpret_cast<int64_t*>(buffer + array_size);
+         int64_t* lengths_dev = reinterpret_cast<int64_t*>(buffer + array_size * 2);
+-        
+-        // Prepare offset/length arrays directly in preallocated pinned memory buffer
+-        // src_offsets: GPU source offsets (bytes, BF16)
+-        // dst_offsets: Host dest offsets (bytes, FP8 - half the size)
+-        // lengths: number of elements (not bytes)
+-        size_t dst_byte_offset = 0;  // FP8 destination offset (in bytes)
+-        
++
++
++        size_t dst_byte_offset = 0;
++
+         for (size_t i = 0; i < num_blocks; ++i) {
+             const auto& block = blocks[i];
+-            size_t num_elements = block.length / sizeof(uint16_t);  // BF16 is 2 bytes
+-            host_blk_buffer_ptr[i] = static_cast<int64_t>(block.dst_offset);  // GPU src offset (bytes)
+-            host_blk_buffer_ptr[num_blocks + i] = static_cast<int64_t>(dst_byte_offset);  // Host dst offset (bytes)
+-            host_blk_buffer_ptr[2 * num_blocks + i] = static_cast<int64_t>(num_elements);  // Element count
+-            dst_byte_offset += num_elements;  // FP8 is 1 byte per element
++            size_t num_elements = block.length / sizeof(uint16_t);
++            host_blk_buffer_ptr[i] = static_cast<int64_t>(block.dst_offset);
++            host_blk_buffer_ptr[num_blocks + i] = static_cast<int64_t>(dst_byte_offset);
++            host_blk_buffer_ptr[2 * num_blocks + i] = static_cast<int64_t>(num_elements);
++            dst_byte_offset += num_elements;
+         }
+-        
++
+         size_t total_metadata_size = num_blocks * sizeof(int64_t) * 3;
+-        CUDA_CHECK(cudaMemcpyAsync(src_offsets_dev, host_blk_buffer_ptr, 
++        CUDA_CHECK(cudaMemcpyAsync(src_offsets_dev, host_blk_buffer_ptr,
+                             total_metadata_size, cudaMemcpyHostToDevice, stream));
+-        
++
+         int num_cuda_blocks, threads_per_block;
+         get_optimal_launch_config(num_cuda_blocks, threads_per_block, CopyDirection::D2H, num_blocks);
+         launch_copy_d2h_bf16_to_fp8_kernel(
+@@ -386,51 +399,50 @@
+             stream
+         );
+     } else {
+-        // Batch processing
+-        size_t dst_byte_offset_total = 0;  // Cumulative FP8 destination offset (in bytes)
++
++        size_t dst_byte_offset_total = 0;
+         size_t processed_blocks = 0;
+-        
++
+         while (processed_blocks < num_blocks) {
+             size_t batch_size = std::min(max_blocks_per_batch, num_blocks - processed_blocks);
+-            
++
+             std::vector<IpcBlock> batch_blocks;
+             batch_blocks.reserve(batch_size);
+-            size_t batch_dst_byte_offset = dst_byte_offset_total;  // Start from cumulative offset
+-            
+-            // Prepare batch blocks
++            size_t batch_dst_byte_offset = dst_byte_offset_total;
++
++
+             for (size_t i = 0; i < batch_size; ++i) {
+                 const auto& block = blocks[processed_blocks + i];
+                 batch_blocks.push_back(block);
+             }
+-            
+-            // Prepare metadata arrays for this batch
++
++
+             int64_t* src_offsets_dev = reinterpret_cast<int64_t*>(buffer);
+             int64_t* dst_offsets_dev = reinterpret_cast<int64_t*>(buffer + array_size_per_batch);
+             int64_t* lengths_dev = reinterpret_cast<int64_t*>(buffer + array_size_per_batch * 2);
+-            
+-            // Offsets relative to batch buffer start (will be 0 for first batch, but kept for consistency)
+-            size_t batch_dst_offset = 0;  // Relative to batch_tensor_buf_ptr
+-            
++
++
++            size_t batch_dst_offset = 0;
++
+             for (size_t i = 0; i < batch_size; ++i) {
+                 const auto& block = batch_blocks[i];
+-                size_t num_elements = block.length / sizeof(uint16_t);  // BF16 is 2 bytes
+-                host_blk_buffer_ptr[i] = static_cast<int64_t>(block.dst_offset);  // GPU src offset (bytes)
+-                host_blk_buffer_ptr[batch_size + i] = static_cast<int64_t>(batch_dst_offset);  // Host dst offset (bytes, relative to batch buffer)
+-                host_blk_buffer_ptr[2 * batch_size + i] = static_cast<int64_t>(num_elements);  // Element count
+-                batch_dst_offset += num_elements;  // FP8 is 1 byte per element
+-            }
+-            
+-            // Update cumulative offsets for next batch
++                size_t num_elements = block.length / sizeof(uint16_t);
++                host_blk_buffer_ptr[i] = static_cast<int64_t>(block.dst_offset);
++                host_blk_buffer_ptr[batch_size + i] = static_cast<int64_t>(batch_dst_offset);
++                host_blk_buffer_ptr[2 * batch_size + i] = static_cast<int64_t>(num_elements);
++                batch_dst_offset += num_elements;
++            }
++
++
+             dst_byte_offset_total += batch_dst_offset;
+-            
++
+             size_t array_size = batch_size * sizeof(int64_t) * 3;
+-            CUDA_CHECK(cudaMemcpyAsync(src_offsets_dev, host_blk_buffer_ptr, 
++            CUDA_CHECK(cudaMemcpyAsync(src_offsets_dev, host_blk_buffer_ptr,
+                                 array_size, cudaMemcpyHostToDevice, stream));
+ 
+-            // Calculate batch tensor buffer pointer
+-            // batch_dst_byte_offset is the start offset for this batch
++
+             uint8_t* batch_tensor_buf_ptr = reinterpret_cast<uint8_t*>(tensor_buf_ptr) + batch_dst_byte_offset;
+-            
++
+             int num_cuda_blocks, threads_per_block;
+             get_optimal_launch_config(num_cuda_blocks, threads_per_block, CopyDirection::D2H, batch_size);
+             launch_copy_d2h_bf16_to_fp8_kernel(
+@@ -445,13 +457,13 @@
+                 stream
+             );
+             processed_blocks += batch_size;
+-            // Sync before next iteration: host_blk_buffer_ptr is reused and will be
+-            // overwritten. Must ensure cudaMemcpyAsync has finished reading it.
++
++
+             CUDA_CHECK(cudaStreamSynchronize(stream));
+         }
+     }
+-    
++
+     return cudaGetLastError();
+ }
+ 
+-}  // namespace blade_llm
++}
+diff --git a/setup.py b/setup.py
+index 37a97906b3de5cd281eeedca65f3a56e5116c63b..7aaa26037e1998a9aca6ebe678ed7f8e9bbdb1a1 100644
+--- a/setup.py
++++ b/setup.py
+@@ -5,6 +5,7 @@
+ import os
+ import re
+ import subprocess
++import sys
+ from pathlib import Path
+ from shutil import which
+ from typing import List, Union
+@@ -15,126 +16,35 @@
+ )
+ 
+ 
++def check_cuda_batch_copy_support() -> bool:
++    import ctypes
++
++    if not which("nvcc"):
++        return False
++    paths = [
++        "/usr/local/cuda/lib64/libcudart.so",
++        "/usr/local/cuda/lib/libcudart.so",
++        "/usr/lib/x86_64-linux-gnu/libcudart.so",
++        "/usr/lib/libcudart.so",
++    ]
++    for variable in ("CUDA_HOME", "CUDA_PATH"):
++        prefix = os.environ.get(variable)
++        if prefix:
++            paths.extend(str(Path(prefix) / directory / "libcudart.so") for directory in ("lib64", "lib"))
++    for path in paths:
++        try:
++            library = ctypes.CDLL(path, mode=os.RTLD_LAZY)
++            getattr(library, "cudaMemcpyBatchAsync")
++            return True
++        except (OSError, AttributeError):
++            continue
++    return False
++
++
+ def is_ninja_available() -> bool:
+     return which("ninja") is not None
+ 
+ 
+-def check_cuda_batch_copy_support() -> bool:
+-    """
+-    Check if CUDA supports cudaMemcpyBatchAsync by compiling a test program.
+-    Returns True if cudaMemcpySrcAccessOrderStream enum is defined (CUDA 12.8+).
+-    """
+-    import tempfile
+-
+-    # Test program to check if cudaMemcpySrcAccessOrderStream enum is available
+-    # This enum is available in CUDA 12.8+ which also provides cudaMemcpyBatchAsync
+-    test_code = """
+-#ifndef _GNU_SOURCE
+-#define _GNU_SOURCE
+-#endif
+-#include <stdio.h>
+-#include <stdlib.h>
+-#include <dlfcn.h>
+-#include <string.h>
+-
+-int main(int argc, char** argv)
+-{
+-    // Symbol to search for
+-    const char* symbol = "cudaMemcpyBatchAsync";
+-
+-    // Automatically search for libcudart.so paths
+-    char lib_paths[10][512];
+-    int path_count = 0;
+-
+-    // Standard paths
+-    strcpy(lib_paths[path_count++], "/usr/local/cuda/lib64/libcudart.so");
+-    strcpy(lib_paths[path_count++], "/usr/local/cuda/lib/libcudart.so");
+-    strcpy(lib_paths[path_count++], "/usr/lib/x86_64-linux-gnu/libcudart.so");
+-    strcpy(lib_paths[path_count++], "/usr/lib/libcudart.so");
+-
+-    // Check CUDA paths from environment variables
+-    const char* cuda_home = getenv("CUDA_HOME");
+-    const char* cuda_path = getenv("CUDA_PATH");
+-
+-    if (cuda_home) {
+-        snprintf(lib_paths[path_count], sizeof(lib_paths[0]), "%s/lib64/libcudart.so", cuda_home);
+-        path_count++;
+-        snprintf(lib_paths[path_count], sizeof(lib_paths[0]), "%s/lib/libcudart.so", cuda_home);
+-        path_count++;
+-    }
+-    if (cuda_path) {
+-        snprintf(lib_paths[path_count], sizeof(lib_paths[0]), "%s/lib64/libcudart.so", cuda_path);
+-        path_count++;
+-        snprintf(lib_paths[path_count], sizeof(lib_paths[0]), "%s/lib/libcudart.so", cuda_path);
+-        path_count++;
+-    }
+-
+-    for (int i = 0; i < path_count; i++) {
+-        const char* lib_path = lib_paths[i];
+-        void* handle = dlopen(lib_path, RTLD_LAZY);
+-        if (handle) {
+-            dlerror();
+-            void* sym = dlsym(handle, symbol);
+-            const char* err = dlerror();
+-
+-            if (err) {
+-                printf("Symbol '%s' NOT found in %s\\n", symbol, lib_path);
+-            } else {
+-                printf("FOUND\\n");
+-                dlclose(handle);
+-                return 0;
+-            }
+-
+-            dlclose(handle);
+-        }
+-    }
+-    printf("NOT_FOUND\\n");
+-    return 1;
+-}
+-"""
+-
+-    try:
+-        # Check if nvcc is available
+-        if not which("nvcc"):
+-            print("nvcc not found, assuming CUDA batch copy is not supported")
+-            return False
+-
+-        # Create temporary directory for test compilation
+-        with tempfile.TemporaryDirectory() as tmpdir:
+-            test_file = os.path.join(tmpdir, "test_cuda_batch.cpp")
+-            with open(test_file, 'w') as f:
+-                f.write(test_code)
+-            test_binary = os.path.join(tmpdir, "test_cuda_batch")
+-            compile_result = subprocess.run(
+-                ["gcc", "-o", test_binary, test_file, "-ldl"],
+-                capture_output=True,
+-                text=True,
+-                timeout=30
+-            )
+-
+-            if compile_result.returncode != 0:
+-                print(f"Failed to compile test program: {compile_result.stderr}")
+-                return False
+-
+-            # Run the test program (it will automatically find libcudart.so and check symbol)
+-            run_result = subprocess.run(
+-                [test_binary],
+-                capture_output=True,
+-                text=True,
+-                timeout=10
+-            )
+-
+-            # Check output: "FOUND" means symbol exists, "NOT_FOUND" means it doesn't
+-            if run_result.returncode == 0 and "FOUND" in run_result.stdout:
+-                print("CUDA batch copy (cudaMemcpyBatchAsync) is supported")
+-                return True
+-            else:
+-                print("CUDA batch copy (cudaMemcpyBatchAsync) is not supported")
+-                return False
+-
+-    except Exception as e:
+-        print(f"Error checking CUDA batch copy support: {e}, assuming not supported")
+-        return False
+ 
+ 
+ class CMakeExtension(Extension):
+@@ -165,6 +75,7 @@
+         cmake_args = [
+             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}",
+             f"-DCMAKE_BUILD_TYPE={cfg}",
++            f"-DPython3_EXECUTABLE={sys.executable}",
+             f"-DTorch_DIR={torch_dir}/Torch",
+             f"-DTARGET_SUFFIX={ext_suffix}",
+         ]
+@@ -190,10 +101,9 @@
+ 
+ 
+ _kvtransfer_src = os.path.join(os.getcwd(), "kvtransfer")
+-_build_options = ["-DBUILD_TESTS=OFF", "-DBUILD_RDMA=ON", "-DBUILD_PYTHON_BIND=ON"]
++_build_options = ["-DBUILD_RDMA=ON", "-DBUILD_PYTHON_BIND=ON", "-DCURL_REQUIRED=OFF"]
+ 
+-# Check CUDA batch copy support and add corresponding CMake option
+-# If PPU_VERSION_NUM environment variable exists, force disable batch copy
++
+ if "PPU_VERSION_NUM" in os.environ:
+     _build_options.append("-DENABLE_BATCH_COPY=OFF")
+     print(f"PPU_VERSION_NUM={os.environ['PPU_VERSION_NUM']} detected, forcing -DENABLE_BATCH_COPY=OFF")
+@@ -218,7 +128,7 @@
+     for line in result.stdout.splitlines():
+         if "Git Message" not in line:
+             continue
+-        # line format: printf("Git Message: %s, %s, %s\n", BUILD_BRANCH, BUILD_COMMIT_ID, BUILD_COMMIT);
++
+         parts = line.split(',')
+         return parts[1].strip()
+     raise RuntimeError(f"barex_ver: failed. {result=}")
+@@ -228,7 +138,7 @@
+     version_parts = [local_ver]
+     if int(os.environ.get("BLADELLM_CMAKE_DEBUG", 0)):
+         version_parts.append('debug')
+-    # This is a misuse of python local version... needs fixing
++
+     version_parts.append(f"barex.{_barex_ver()}")
+     return '.'.join(version_parts)
+ 
+@@ -243,7 +153,7 @@
+                           git_describe_command=git_describe_command)
+     return version
+ 
+-# rm -rf blade_llm.egg blade_kvt.egg dist/
++
+ setup(
+     name="blade_kvt",
+     version=get_kvt_version(),
